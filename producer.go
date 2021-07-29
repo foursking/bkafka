@@ -102,7 +102,7 @@ func (v *SyncProducer) Start(topic string, data <-chan string, f func(topic stri
 }
 
 //AsyncProducer.Start 异步消息
-func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(topic string, partition int32, offset int64)) error {
+func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(data *sarama.ProducerError)) error {
 	v.stop = make(chan bool)
 	config := kafkaConf()
 	config.Producer.Timeout = time.Duration(v.Timeout) * time.Second
@@ -110,19 +110,22 @@ func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(topic string, part
 	config.Producer.RequiredAcks = sarama.WaitForAll
 	//随机向partition发送消息
 	config.Producer.Partitioner = sarama.NewRandomPartitioner
-	//是否等待成功和失败后的响应,只有上面的RequireAcks设置不是NoReponse这里才有用.
+	//是否等待成功和失败后的响应,只有上面的RequireAcks设置不是NoReponse这里才有用. (异步发送不受影响)
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	config.Producer.Compression = sarama.CompressionLZ4
 
 	//设置使用的kafka版本,如果低于V0_10_0_0版本,消息中的timestrap没有作用.需要消费和生产同时配置
 	//注意，版本设置不对的话，kafka会返回很奇怪的错误，并且无法成功发送消息
+
+	/*
 	if v.Version != (sarama.KafkaVersion{}) {
 		config.Version = v.Version
 	} else {
 		config.Version = Version
 	}
-	//fmt.Println("+++++++++++++++++++++++++++++")
+	*/
+
 	//使用配置,新建一个异步生产者
 	producer, err := sarama.NewAsyncProducer(v.Address, config)
 
@@ -135,18 +138,20 @@ func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(topic string, part
 	go func(p sarama.AsyncProducer) {
 		for {
 			select {
-			case suc := <-p.Successes():
+				//如果成功暂时不做处理吧 还没时间弄
+			case <-p.Successes():
 				//fmt.Println("offset: ", suc.Offset, "timestamp: ", suc.Timestamp.String(), "partitions: ", suc.Partition)
+				/*
 				if f != nil {
 					f(suc.Topic, suc.Partition, suc.Offset)
 				}
+				*/
 
+				//异常返回 p.Errors() *sarama.ProducerError
 			case fail := <-p.Errors():
 				if f != nil {
-					f(fail.Msg.Topic, 0, 0)
+					f(fail)
 				}
-				fmt.Println(fail.Err)
-				fmt.Println("fail 10")
 				//log.Error("err: ", fail.Err)
 			}
 		}
@@ -155,7 +160,7 @@ func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(topic string, part
 	for {
 		select {
 		case <-v.stop:
-			fmt.Println("kafka AsyncProducer is stop")
+			//fmt.Println("kafka AsyncProducer is stop")
 			return nil
 		case msg := <-data:
 			if msg.Content != "" {
