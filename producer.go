@@ -114,8 +114,8 @@ func (v *AsyncProducer) Start(data <-chan ProducerMsg, f func(data *sarama.Produ
 	config.Producer.Return.Successes = true
 	config.Producer.Return.Errors = true
 	config.Producer.Compression = sarama.CompressionLZ4
-	config.Producer.Flush.Messages = 10                      // 缓存条数
-	config.Producer.Flush.Frequency = 500 * time.Millisecond
+	//config.Producer.Flush.Messages = 10                      // 缓存条数
+	//config.Producer.Flush.Frequency = 500 * time.Millisecond
 
 	//设置使用的kafka版本,如果低于V0_10_0_0版本,消息中的timestrap没有作用.需要消费和生产同时配置
 	//注意，版本设置不对的话，kafka会返回很奇怪的错误，并且无法成功发送消息
